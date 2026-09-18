@@ -1,6 +1,6 @@
 --=============================================================
 -- NEXUS HUB - main.lua
--- Key remota (le do keys.txt) + Aimbot + ESP + TP + Player + Armas + Teams + Farm + Config
+-- Key remota + Aimbot + ESP + TP + Tools + Player + Armas + Teams + Farm + Config
 --=============================================================
 
 local Players = game:GetService("Players")
@@ -18,7 +18,6 @@ local UIS = UserInputService
 -- KEY SYSTEM REMOTO
 --=============================================================
 local KEYS_URL = "https://raw.githubusercontent.com/leonardobquinello-ship-it/Nexus-hub/main/keys.txt"
-
 local VALID_KEYS = {}
 
 pcall(function()
@@ -33,12 +32,7 @@ pcall(function()
 end)
 
 if next(VALID_KEYS) == nil then
-    VALID_KEYS = {
-        ["2010pepeu"]=true, ["NEXUS-A1B2-C3D4"]=true, ["NEXUS-E5F6-G7H8"]=true,
-        ["NEXUS-I9J0-K1L2"]=true, ["NEXUS-M3N4-O5P6"]=true, ["NEXUS-Q7R8-S9T0"]=true,
-        ["NEXUS-U1V2-W3X4"]=true, ["NEXUS-Y5Z6-A7B8"]=true, ["NEXUS-C9D0-E1F2"]=true,
-        ["NEXUS-G3H4-I5J6"]=true,
-    }
+    VALID_KEYS = { ["2010pepeu"]=true }
 end
 
 local keyOk = false
@@ -567,7 +561,8 @@ local function CreateDropdown(parent, label, options, default, callback)
 
     btn.MouseButton1Click:Connect(function()
         current = current + 1
-        if current > #options then current = 1 end
+        if current > #options then current = #options end
+        if current < 1 then current = 1 end
         btn.Text = options[current] .. " v"
         if callback then callback(options[current]) end
     end)
@@ -694,7 +689,169 @@ local function AddTab(name, icon)
 end
 
 --=============================================================
--- FUNCAO TP MULTI-METODO
+-- SISTEMA DE PULL DE TOOLS
+--=============================================================
+local function ProcurarTool(nomeBusca)
+    local nomeLower = string.lower(nomeBusca)
+    local pastas = {
+        ReplicatedStorage,
+        ServerStorage,
+        workspace,
+        LocalPlayer.Backpack,
+        LocalPlayer:FindFirstChild("PlayerGui"),
+    }
+
+    for _, pasta in ipairs(pastas) do
+        if pasta then
+            for _, obj in ipairs(pasta:GetDescendants()) do
+                if obj:IsA("Tool") then
+                    if string.find(string.lower(obj.Name), nomeLower, 1, true) then
+                        return obj
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function PuxarTool(nomeTool)
+    -- ETAPA 1: Procura o Tool no jogo
+    local tool = ProcurarTool(nomeTool)
+
+    if tool then
+        local sucesso = pcall(function()
+            local clone = tool:Clone()
+            clone.Parent = LocalPlayer.Backpack
+        end)
+
+        if sucesso then
+            Notificar("Tool puxada", nomeTool, Color3.fromRGB(0,255,136))
+            return true
+        end
+    end
+
+    -- ETAPA 2: Se nao achou, tenta RemoteEvent de give tool
+    local sucesso = false
+    pcall(function()
+        for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
+            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                local n = string.lower(obj.Name)
+                if n:find("give") or n:find("tool") or n:find("weapon") or n:find("get") or n:find("pick") or n:find("buy") or n:find("shop") or n:find("kit") then
+                    pcall(function() obj:FireServer(nomeTool) end)
+                    pcall(function() obj:FireServer(nomeTool, 1) end)
+                    sucesso = true
+                end
+            end
+        end
+    end)
+
+    if sucesso then
+        Notificar("Tentativa via Remote", nomeTool, Color3.fromRGB(0,200,255))
+        return true
+    end
+
+    Notificar("Nao encontrado", nomeTool .. " nao existe no jogo", Color3.fromRGB(255,100,100))
+    return false
+end
+
+local ToolsTab = AddTab("Tools", "T")
+
+CreateSection(ToolsTab, "Puxar Armas")
+
+local toolsList = {
+    { nome = "M4A1", busca = "m4a1" },
+    { nome = "HK", busca = "hk" },
+    { nome = "Pack Rico", busca = "pack rico" },
+    { nome = "Dragon", busca = "dragon" },
+    { nome = "Gun Golden", busca = "golden" },
+    { nome = "AS VAL", busca = "as val" },
+}
+
+for _, t in ipairs(toolsList) do
+    CreateButton(ToolsTab, "🔫 " .. t.nome, function()
+        PuxarTool(t.busca)
+    end)
+end
+
+CreateSection(ToolsTab, "Puxar TODAS")
+CreateButton(ToolsTab, "🎒 Puxar TODAS as tools", function()
+    local count = 0
+    for _, t in ipairs(toolsList) do
+        local ok = PuxarTool(t.busca)
+        if ok then count = count + 1 end
+        task.wait(0.3)
+    end
+    Notificar("Finalizado", count .. "/" .. #toolsList .. " tools puxadas", Color3.fromRGB(0,255,224))
+end)
+
+CreateSection(ToolsTab, "Buscar Tool Manual")
+local buscaFrame = Instance.new("Frame")
+buscaFrame.Size = UDim2.new(1,0,0,40)
+buscaFrame.BackgroundColor3 = Color3.fromRGB(25,25,40)
+buscaFrame.BorderSizePixel = 0
+buscaFrame.Parent = ToolsTab
+
+local buscaC = Instance.new("UICorner")
+buscaC.CornerRadius = UDim.new(0,8)
+buscaC.Parent = buscaFrame
+
+local buscaInput = Instance.new("TextBox")
+buscaInput.Size = UDim2.fromScale(1,1)
+buscaInput.BackgroundTransparency = 1
+buscaInput.Text = ""
+buscaInput.PlaceholderText = "Digite o nome da tool..."
+buscaInput.PlaceholderColor3 = Color3.fromRGB(100,100,130)
+buscaInput.Font = Enum.Font.Code
+buscaInput.TextSize = 13
+buscaInput.TextColor3 = Color3.fromRGB(0,255,224)
+buscaInput.TextXAlignment = Enum.TextXAlignment.Center
+buscaInput.ClearTextOnFocus = false
+buscaInput.Parent = buscaFrame
+
+CreateButton(ToolsTab, "🔍 Buscar e puxar", function()
+    local nome = buscaInput.Text:gsub("^%s+",""):gsub("%s+$","")
+    if nome == "" then
+        Notificar("Vazio", "Digite o nome da tool", Color3.fromRGB(255,180,0))
+        return
+    end
+    PuxarTool(nome)
+end)
+
+CreateSection(ToolsTab, "Debug")
+CreateButton(ToolsTab, "Escanear TODAS as Tools (Console)", function()
+    print("===== TOOLS ENCONTRADAS =====")
+    local pastas = {ReplicatedStorage, ServerStorage, workspace}
+    local count = 0
+    for _, pasta in ipairs(pastas) do
+        if pasta then
+            for _, obj in ipairs(pasta:GetDescendants()) do
+                if obj:IsA("Tool") then
+                    count = count + 1
+                    print("   [" .. count .. "] " .. obj:GetFullName())
+                end
+            end
+        end
+    end
+    print("Total: " .. count .. " tools")
+    Notificar("Scan completo", count .. " tools (veja console)", Color3.fromRGB(0,200,255))
+end)
+
+CreateButton(ToolsTab, "Ver tools na minha mochila", function()
+    print("===== MOCHILA =====")
+    for _, t in ipairs(LocalPlayer.Backpack:GetChildren()) do
+        if t:IsA("Tool") then print("   " .. t.Name) end
+    end
+    print("===== EQUIPADO =====")
+    if LocalPlayer.Character then
+        for _, t in ipairs(LocalPlayer.Character:GetChildren()) do
+            if t:IsA("Tool") then print("   " .. t.Name) end
+        end
+    end
+end)
+
+--=============================================================
+-- FUNCAO TP
 --=============================================================
 local function TP_ParaPosicao(destino)
     local char = LocalPlayer.Character
@@ -705,23 +862,20 @@ local function TP_ParaPosicao(destino)
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if hrp then
             local ok = pcall(function() hrp.CFrame = CFrame.new(destino) end)
-            if ok then return true, "HRP CFrame" end
+            if ok then return true, "HRP" end
         end
     end
-
     if metodo == "Auto" or metodo == "Pivot" then
         local ok = pcall(function() char:PivotTo(CFrame.new(destino)) end)
-        if ok then return true, "PivotTo" end
+        if ok then return true, "Pivot" end
     end
-
     if metodo == "Auto" or metodo == "MoveTo" then
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum then
             local ok = pcall(function() hum:MoveTo(destino) end)
-            if ok then return true, "Humanoid MoveTo" end
+            if ok then return true, "MoveTo" end
         end
     end
-
     if metodo == "Auto" or metodo == "Velocity" then
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if hrp then
@@ -732,19 +886,7 @@ local function TP_ParaPosicao(destino)
             if ok then return true, "Velocity" end
         end
     end
-
-    if metodo == "Auto" or metodo == "Agressivo" then
-        local ok = pcall(function()
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CFrame = part.CFrame + (destino - char.PrimaryPart.Position)
-                end
-            end
-        end)
-        if ok then return true, "Agressivo" end
-    end
-
-    return false, "Todos os metodos falharam"
+    return false, "Falhou"
 end
 
 local function TP_ComSmooth(destino, tempo)
@@ -752,8 +894,7 @@ local function TP_ComSmooth(destino, tempo)
     if not char then return false end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
-    local tween = TweenService:Create(hrp, TweenInfo.new(tempo or 0.5, Enum.EasingStyle.Linear), {CFrame = CFrame.new(destino)})
-    tween:Play()
+    TweenService:Create(hrp, TweenInfo.new(tempo or 0.5, Enum.EasingStyle.Linear), {CFrame = CFrame.new(destino)}):Play()
     return true
 end
 
@@ -761,7 +902,6 @@ end
 -- ABA PLAYER
 --=============================================================
 local PlayerTab = AddTab("Player", "P")
-
 local flyConnection, flyBodyVelocity, flyBodyGyro
 
 local function StartFly()
@@ -786,7 +926,6 @@ local function StartFly()
         if not LocalPlayer.Character then return end
         local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if not root then return end
-
         local moveDir = Vector3.zero
         if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.LookVector end
         if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
@@ -794,7 +933,6 @@ local function StartFly()
         if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.RightVector end
         if UIS:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
         if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3.new(0,1,0) end
-
         flyBodyVelocity.Velocity = moveDir.Magnitude > 0 and moveDir.Unit * State.Player.FlySpeed or Vector3.zero
         flyBodyGyro.CFrame = Camera.CFrame
     end)
@@ -818,11 +956,8 @@ end)
 CreateSlider(PlayerTab, "Velocidade do Fly", 50, 1000, 150, function(v) State.Player.FlySpeed = v end)
 CreateToggle(PlayerTab, "Noclip", false, function(v) State.Player.Noclip = v end)
 
--- ============ TP ============
-CreateSection(PlayerTab, "Teleport (TP) - Funciona de longe")
-
+CreateSection(PlayerTab, "Teleport (TP)")
 local selectedTP = nil
-
 local tpFrame = Instance.new("Frame")
 tpFrame.Size = UDim2.new(1,0,0,150)
 tpFrame.BackgroundColor3 = Color3.fromRGB(20,20,35)
@@ -937,14 +1072,14 @@ task.spawn(function()
     end
 end)
 
-CreateSection(PlayerTab, "Configuracoes do TP")
-CreateDropdown(PlayerTab, "Metodo", {"Auto", "HRP", "Pivot", "MoveTo", "Velocity", "Agressivo"}, "Auto", function(v) State.TP.Method = v end)
-CreateToggle(PlayerTab, "TP Suave (Tween)", false, function(v) State.TP.Smooth = v end)
-CreateSlider(PlayerTab, "Tempo do TP suave (ms)", 100, 2000, 500, function(v) State.TP.SmoothTime = v / 1000 end)
+CreateSection(PlayerTab, "Config TP")
+CreateDropdown(PlayerTab, "Metodo", {"Auto", "HRP", "Pivot", "MoveTo", "Velocity"}, "Auto", function(v) State.TP.Method = v end)
+CreateToggle(PlayerTab, "TP Suave", false, function(v) State.TP.Smooth = v end)
+CreateSlider(PlayerTab, "Tempo do TP (ms)", 100, 2000, 500, function(v) State.TP.SmoothTime = v / 1000 end)
 
-CreateButton(PlayerTab, "TP para o jogador selecionado", function()
+CreateButton(PlayerTab, "📍 TP para jogador selecionado", function()
     if not selectedTP then
-        Notificar("Nenhum jogador", "Clique num jogador da lista", Color3.fromRGB(255,180,0))
+        Notificar("Nenhum jogador", "Clique num jogador", Color3.fromRGB(255,180,0))
         return
     end
     local target = Players:FindFirstChild(selectedTP)
@@ -954,30 +1089,21 @@ CreateButton(PlayerTab, "TP para o jogador selecionado", function()
     end
     local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
     if not targetHRP then
-        Notificar("Falha", "Alvo sem HRP", Color3.fromRGB(255,100,100))
+        Notificar("Falha", "Sem HRP", Color3.fromRGB(255,100,100))
         return
     end
     local destino = targetHRP.Position + Vector3.new(0, 3, 0)
     if State.TP.Smooth then
-        local ok = TP_ComSmooth(destino, State.TP.SmoothTime)
-        if ok then Notificar("TP Suave", "Para: "..selectedTP, Color3.fromRGB(0,255,136)) end
+        TP_ComSmooth(destino, State.TP.SmoothTime)
+        Notificar("TP Suave", selectedTP, Color3.fromRGB(0,255,136))
     else
-        local ok, metodo = TP_ParaPosicao(destino)
-        if ok then Notificar("TP OK ("..metodo..")", "Para: "..selectedTP, Color3.fromRGB(0,255,136))
-        else Notificar("Falha", tostring(metodo), Color3.fromRGB(255,100,100)) end
+        local ok, m = TP_ParaPosicao(destino)
+        if ok then Notificar("TP OK ("..m..")", selectedTP, Color3.fromRGB(0,255,136))
+        else Notificar("Falha", tostring(m), Color3.fromRGB(255,100,100)) end
     end
 end)
 
-CreateButton(PlayerTab, "TP para a frente da mira", function()
-    local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not myHRP then return end
-    local destino = myHRP.Position + (Camera.CFrame.LookVector * 50)
-    local ok, metodo = TP_ParaPosicao(destino)
-    if ok then Notificar("TP OK ("..metodo..")", "50 studs a frente", Color3.fromRGB(0,255,136))
-    else Notificar("Falha", tostring(metodo), Color3.fromRGB(255,100,100)) end
-end)
-
-CreateButton(PlayerTab, "Atualizar lista de players", function()
+CreateButton(PlayerTab, "🔄 Atualizar lista", function()
     RefreshTPList()
     Notificar("Lista atualizada", #tpRows.." jogadores", Color3.fromRGB(0,200,255))
 end)
@@ -993,7 +1119,6 @@ end)
 -- ABA AIMBOT
 --=============================================================
 local AimbotTab = AddTab("Aimbot", "A")
-
 CreateSection(AimbotTab, "Geral")
 CreateToggle(AimbotTab, "Ativar Aimbot", false, function(v) State.Aimbot.Enabled = v end)
 CreateToggle(AimbotTab, "Segurar Botao Direito", false, function(v) State.Aimbot.OnClick = v end)
@@ -1006,13 +1131,13 @@ CreateDropdown(AimbotTab, "Tipo", {"Camera","Snap","Rage"}, "Camera", function(v
 CreateSection(AimbotTab, "Config")
 CreateSlider(AimbotTab, "FOV", 10, 800, 120, function(v) State.Aimbot.FOV = v end)
 CreateSlider(AimbotTab, "Suavidade", 1, 100, 5, function(v) State.Aimbot.Smooth = v end)
-CreateSlider(AimbotTab, "Distancia maxima", 10, 1000, 500, function(v) State.Aimbot.MaxDist = v end)
-CreateDropdown(AimbotTab, "Parte do alvo", {"Head","UpperTorso","HumanoidRootPart"}, "Head", function(v) State.Aimbot.Part = v end)
+CreateSlider(AimbotTab, "Distancia", 10, 1000, 500, function(v) State.Aimbot.MaxDist = v end)
+CreateDropdown(AimbotTab, "Parte", {"Head","UpperTorso","HumanoidRootPart"}, "Head", function(v) State.Aimbot.Part = v end)
 
 CreateSection(AimbotTab, "FOV Visual")
 CreateToggle(AimbotTab, "Mostrar circulo FOV", true, function(v) State.Aimbot.ShowFOV = v end)
 
-CreateSection(AimbotTab, "Whitelist (ignorar jogadores)")
+CreateSection(AimbotTab, "Whitelist")
 local playerListFrame = Instance.new("Frame")
 playerListFrame.Size = UDim2.new(1,0,0,150)
 playerListFrame.BackgroundColor3 = Color3.fromRGB(20,20,35)
@@ -1152,7 +1277,6 @@ local function GetClosestTarget()
         if plr ~= LocalPlayer and IsAliveAimbot(plr) then
             if AimbotWhitelist[plr.Name] then continue end
             if State.Aimbot.TeamCheck and plr.Team == LocalPlayer.Team then continue end
-
             local target = plr.Character:FindFirstChild(State.Aimbot.Part)
             if target then
                 local screenPos, onScreen = Camera:WorldToViewportPoint(target.Position)
@@ -1178,10 +1302,8 @@ local function ExecuteAimbot()
     if not State.Aimbot.Enabled then return end
     if State.Aimbot.OnClick and not UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then return end
     if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
-
     local target = GetClosestTarget()
     if not target or not target.Character then return end
-
     local part = target.Character:FindFirstChild(State.Aimbot.Part)
         or target.Character:FindFirstChild("Head")
         or target.Character:FindFirstChild("HumanoidRootPart")
@@ -1345,7 +1467,6 @@ end)
 -- ABA TEAMS
 --=============================================================
 local TeamsTab = AddTab("Teams", "T")
-
 local teamsList = {"Civil","Eletricista","Samu","PM","GCM","CI","CRT","PRF","TDF","MEC","ROTA","PF","PC","BOPE","Cartel","Militar","Federal","EB","Turquia"}
 
 local function EncontrarTimePorNome(nomeBusca)
@@ -1651,6 +1772,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-SwitchTab("Player")
-Notificar("Nexus Hub", "Key remota ativa! Edite keys.txt pra gerenciar", Color3.fromRGB(0,255,224))
-print("[NEXUS] Hub carregado! Keys remotas de: " .. KEYS_URL)
+SwitchTab("Tools")
+Notificar("Nexus Hub", "Tools adicionadas! Clique pra puxar", Color3.fromRGB(0,255,224))
+print("[NEXUS] Hub carregado!")
