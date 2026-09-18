@@ -1,6 +1,6 @@
 --=============================================================
 -- NEXUS HUB - main.lua
--- Key + Load + Aimbot (whitelist) + ESP + Player + Armas + Teams + AutoFarm + Config
+-- Key + Load + Aimbot + ESP (Skeleton + Dist) + TP + Player + Armas + Teams + Farm + Config
 --=============================================================
 
 local Players = game:GetService("Players")
@@ -18,16 +18,10 @@ local UIS = UserInputService
 -- KEY SYSTEM
 --=============================================================
 local VALID_KEYS = {
-    ["2010pepeu"]        = true,
-    ["NEXUS-A1B2-C3D4"]  = true,
-    ["NEXUS-E5F6-G7H8"]  = true,
-    ["NEXUS-I9J0-K1L2"]  = true,
-    ["NEXUS-M3N4-O5P6"]  = true,
-    ["NEXUS-Q7R8-S9T0"]  = true,
-    ["NEXUS-U1V2-W3X4"]  = true,
-    ["NEXUS-Y5Z6-A7B8"]  = true,
-    ["NEXUS-C9D0-E1F2"]  = true,
-    ["NEXUS-G3H4-I5J6"]  = true,
+    ["2010pepeu"]=true, ["NEXUS-A1B2-C3D4"]=true, ["NEXUS-E5F6-G7H8"]=true,
+    ["NEXUS-I9J0-K1L2"]=true, ["NEXUS-M3N4-O5P6"]=true, ["NEXUS-Q7R8-S9T0"]=true,
+    ["NEXUS-U1V2-W3X4"]=true, ["NEXUS-Y5Z6-A7B8"]=true, ["NEXUS-C9D0-E1F2"]=true,
+    ["NEXUS-G3H4-I5J6"]=true,
 }
 
 local keyOk = false
@@ -40,9 +34,7 @@ end)
 if not keyOk then
     local parentGui = CoreGui
     local testOk = pcall(function()
-        local t = Instance.new("ScreenGui")
-        t.Parent = CoreGui
-        t:Destroy()
+        local t = Instance.new("ScreenGui"); t.Parent = CoreGui; t:Destroy()
     end)
     if not testOk then parentGui = LocalPlayer:WaitForChild("PlayerGui") end
 
@@ -147,16 +139,11 @@ if not keyOk then
 
     KEnter.MouseButton1Click:Connect(function()
         local e = KInput.Text:gsub("%s+","")
-        if e == "" then
-            KStatus.Text = "Digite uma key!"
-            return
-        end
+        if e == "" then KStatus.Text = "Digite uma key!" return end
         if VALID_KEYS[e] then
             KStatus.Text = "Key valida!"
             KStatus.TextColor3 = Color3.fromRGB(0,255,136)
-            pcall(function()
-                if writefile then writefile("nexus_key.txt", e) end
-            end)
+            pcall(function() if writefile then writefile("nexus_key.txt", e) end end)
             task.wait(0.5)
             keyOk = true
             KeyGui:Destroy()
@@ -231,9 +218,7 @@ task.spawn(function()
     task.wait(0.3)
     local fade = TweenInfo.new(0.5, Enum.EasingStyle.Quad)
     for _, d in ipairs(LBg:GetDescendants()) do
-        if d:IsA("TextLabel") then
-            TweenService:Create(d, fade, {TextTransparency=1}):Play()
-        end
+        if d:IsA("TextLabel") then TweenService:Create(d, fade, {TextTransparency=1}):Play() end
     end
     TweenService:Create(LBg, fade, {BackgroundTransparency=1}):Play()
     task.wait(0.5)
@@ -246,12 +231,13 @@ end)
 local State = {
     Aimbot = { Enabled=false, Mode="Camera", OnClick=false, FOV=120, Smooth=5, Part="Head",
                MaxDist=500, TeamCheck=true, VisibleCheck=true, ShowFOV=true },
-    ESP = { Enabled=false, Box=false, Name=false, Dist=false, Line=false, TeamCheck=true },
+    ESP = { Enabled=false, Box=false, Name=false, Dist=false, Line=false, TeamCheck=true,
+            Health=false, Skeleton=false, SkeletonThick=1,
+            MaxDistance=1000, MinDistance=0 },
     Player = { Fly=false, FlySpeed=150, Noclip=false },
     AutoFarm = { Enabled=false, Speed=0.5 },
 }
 
--- Whitelist do Aimbot
 local AimbotWhitelist = {}
 
 --=============================================================
@@ -570,7 +556,7 @@ local function CreateDropdown(parent, label, options, default, callback)
 end
 
 --=============================================================
--- NOTIFICAÇÃO
+-- NOTIFICACAO
 --=============================================================
 local function Notificar(titulo, texto, cor)
     local notif = Instance.new("Frame")
@@ -621,7 +607,7 @@ local function Notificar(titulo, texto, cor)
 end
 
 --=============================================================
--- SISTEMA DE ABAS
+-- ABAS
 --=============================================================
 local tabButtons = {}
 local tabContents = {}
@@ -690,7 +676,7 @@ local function AddTab(name, icon)
 end
 
 --=============================================================
--- ABA PLAYER
+-- ABA PLAYER (com TP para players)
 --=============================================================
 local PlayerTab = AddTab("Player", "P")
 
@@ -750,8 +736,125 @@ end)
 CreateSlider(PlayerTab, "Velocidade do Fly", 50, 1000, 150, function(v) State.Player.FlySpeed = v end)
 CreateToggle(PlayerTab, "Noclip", false, function(v) State.Player.Noclip = v end)
 
+-- ============ TP PARA PLAYERS ============
+CreateSection(PlayerTab, "Teleport (TP)")
+
+local selectedTP = nil
+
+local tpFrame = Instance.new("Frame")
+tpFrame.Size = UDim2.new(1,0,0,180)
+tpFrame.BackgroundColor3 = Color3.fromRGB(20,20,35)
+tpFrame.BorderSizePixel = 0
+tpFrame.Parent = PlayerTab
+
+local tpFrameC = Instance.new("UICorner")
+tpFrameC.CornerRadius = UDim.new(0,8)
+tpFrameC.Parent = tpFrame
+
+local tpScroll = Instance.new("ScrollingFrame")
+tpScroll.Size = UDim2.fromScale(1,1)
+tpScroll.BackgroundTransparency = 1
+tpScroll.BorderSizePixel = 0
+tpScroll.ScrollBarThickness = 4
+tpScroll.ScrollBarImageColor3 = Color3.fromRGB(0,255,224)
+tpScroll.CanvasSize = UDim2.new(0,0,0,0)
+tpScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+tpScroll.Parent = tpFrame
+
+local tpLayout = Instance.new("UIListLayout")
+tpLayout.SortOrder = Enum.SortOrder.LayoutOrder
+tpLayout.Padding = UDim.new(0,3)
+tpLayout.Parent = tpScroll
+
+local tpPad = Instance.new("UIPadding")
+tpPad.PaddingTop = UDim.new(0,6)
+tpPad.PaddingLeft = UDim.new(0,6)
+tpPad.PaddingRight = UDim.new(0,6)
+tpPad.Parent = tpScroll
+
+local tpRows = {}
+local selectedTPRow = nil
+
+local function RefreshTPList()
+    for _, row in ipairs(tpRows) do
+        if row and row.Parent then row:Destroy() end
+    end
+    tpRows = {}
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local row = Instance.new("TextButton")
+            row.Size = UDim2.new(1,-12,0,24)
+            row.BackgroundColor3 = Color3.fromRGB(35,35,55)
+            row.BorderSizePixel = 0
+            row.Text = ""
+            row.Parent = tpScroll
+
+            local rc = Instance.new("UICorner")
+            rc.CornerRadius = UDim.new(0,6)
+            rc.Parent = row
+
+            local txt = Instance.new("TextLabel")
+            txt.Position = UDim2.new(0,10,0,0)
+            txt.Size = UDim2.new(1,-14,1,0)
+            txt.BackgroundTransparency = 1
+            txt.Text = plr.Name
+            txt.Font = Enum.Font.Gotham
+            txt.TextSize = 12
+            txt.TextColor3 = Color3.fromRGB(220,220,230)
+            txt.TextXAlignment = Enum.TextXAlignment.Left
+            txt.Parent = row
+
+            row.MouseButton1Click:Connect(function()
+                if selectedTPRow then
+                    selectedTPRow.BackgroundColor3 = Color3.fromRGB(35,35,55)
+                end
+                row.BackgroundColor3 = Color3.fromRGB(0,180,160)
+                selectedTPRow = row
+                selectedTP = plr.Name
+            end)
+
+            table.insert(tpRows, row)
+        end
+    end
+end
+
+RefreshTPList()
+
+CreateButton(PlayerTab, "📍 TP para o jogador selecionado", function()
+    if not selectedTP then
+        Notificar("Nenhum jogador", "Clique num jogador da lista", Color3.fromRGB(255,180,0))
+        return
+    end
+    local target = Players:FindFirstChild(selectedTP)
+    if not target or not target.Character then
+        Notificar("Nao encontrado", selectedTP.." saiu", Color3.fromRGB(255,180,0))
+        return
+    end
+    local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
+    local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if targetHRP and myHRP then
+        myHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
+        Notificar("Teleportado", "Para: "..selectedTP, Color3.fromRGB(0,255,136))
+    else
+        Notificar("Falha", "Nao foi possivel teleportar", Color3.fromRGB(255,100,100))
+    end
+end)
+
+CreateButton(PlayerTab, "🔄 Atualizar lista de players", function()
+    RefreshTPList()
+    Notificar("Lista atualizada", #tpRows.." jogadores", Color3.fromRGB(0,200,255))
+end)
+
+task.spawn(function()
+    while PlayerTab.Parent do
+        task.wait(5)
+        RefreshTPList()
+    end
+end)
+
 --=============================================================
--- ABA AIMBOT (com whitelist)
+-- ABA AIMBOT
 --=============================================================
 local AimbotTab = AddTab("Aimbot", "A")
 
@@ -773,9 +876,7 @@ CreateDropdown(AimbotTab, "Parte do alvo", {"Head","UpperTorso","HumanoidRootPar
 CreateSection(AimbotTab, "FOV Visual")
 CreateToggle(AimbotTab, "Mostrar circulo FOV", true, function(v) State.Aimbot.ShowFOV = v end)
 
--- WHITELIST
 CreateSection(AimbotTab, "Whitelist (ignorar jogadores)")
-
 local wlInfo = Instance.new("TextLabel")
 wlInfo.Size = UDim2.new(1,0,0,20)
 wlInfo.BackgroundTransparency = 1
@@ -787,7 +888,7 @@ wlInfo.TextXAlignment = Enum.TextXAlignment.Left
 wlInfo.Parent = AimbotTab
 
 local playerListFrame = Instance.new("Frame")
-playerListFrame.Size = UDim2.new(1,0,0,180)
+playerListFrame.Size = UDim2.new(1,0,0,150)
 playerListFrame.BackgroundColor3 = Color3.fromRGB(20,20,35)
 playerListFrame.BorderSizePixel = 0
 playerListFrame.Parent = AimbotTab
@@ -889,17 +990,8 @@ local function RefreshPlayerList()
 end
 
 RefreshPlayerList()
-
-CreateButton(AimbotTab, "Atualizar lista de jogadores", function()
-    RefreshPlayerList()
-    Notificar("Lista atualizada", #playerRows .. " jogadores", Color3.fromRGB(0,200,255))
-end)
-
-CreateButton(AimbotTab, "Limpar whitelist", function()
-    AimbotWhitelist = {}
-    RefreshPlayerList()
-    Notificar("Whitelist limpa", "Aimbot mira em todos", Color3.fromRGB(0,255,136))
-end)
+CreateButton(AimbotTab, "Atualizar lista", function() RefreshPlayerList() end)
+CreateButton(AimbotTab, "Limpar whitelist", function() AimbotWhitelist = {} RefreshPlayerList() end)
 
 task.spawn(function()
     while AimbotTab.Parent do
@@ -908,7 +1000,6 @@ task.spawn(function()
     end
 end)
 
--- LOGICA AIMBOT
 local function IsAliveAimbot(plr)
     if not (plr and plr.Character) then return false end
     local hum = plr.Character:FindFirstChildOfClass("Humanoid")
@@ -995,17 +1086,35 @@ CreateToggle(EspTab, "Ativar ESP", false, function(v)
     State.ESP.Enabled = v
     if not v then
         for _, esp in pairs(ESPObjs) do
-            for _, d in pairs(esp) do pcall(function() d.Visible = false end) end
+            for _, d in pairs(esp) do
+                if d and d.Visible ~= nil then pcall(function() d.Visible = false end) end
+            end
         end
     end
 end)
 CreateToggle(EspTab, "Filtro por equipe", true, function(v) State.ESP.TeamCheck = v end)
 
+CreateSection(EspTab, "Distancia")
+CreateSlider(EspTab, "Distancia maxima (m)", 10, 2000, 1000, function(v) State.ESP.MaxDistance = v end)
+CreateSlider(EspTab, "Distancia minima (m)", 0, 200, 0, function(v) State.ESP.MinDistance = v end)
+
 CreateSection(EspTab, "Elementos")
-CreateToggle(EspTab, "Caixa", false, function(v) State.ESP.Box = v end)
+CreateToggle(EspTab, "Caixa (Box)", false, function(v) State.ESP.Box = v end)
 CreateToggle(EspTab, "Nome", false, function(v) State.ESP.Name = v end)
-CreateToggle(EspTab, "Distancia", false, function(v) State.ESP.Dist = v end)
-CreateToggle(EspTab, "Linha", false, function(v) State.ESP.Line = v end)
+CreateToggle(EspTab, "Distancia (texto)", false, function(v) State.ESP.Dist = v end)
+CreateToggle(EspTab, "Vida (Health)", false, function(v) State.ESP.Health = v end)
+CreateToggle(EspTab, "Linha / Tracer", false, function(v) State.ESP.Line = v end)
+
+CreateSection(EspTab, "Skeleton")
+CreateToggle(EspTab, "Ativar Skeleton", false, function(v) State.ESP.Skeleton = v end)
+CreateSlider(EspTab, "Espessura das linhas", 1, 5, 1, function(v) State.ESP.SkeletonThick = v end)
+
+local function CreateSkeletonPart()
+    local l = Drawing.new("Line")
+    l.Thickness = 1
+    l.Transparency = 1
+    return l
+end
 
 local function CreateESP(plr)
     if plr == LocalPlayer then return end
@@ -1013,7 +1122,14 @@ local function CreateESP(plr)
         Box = Drawing.new("Square"),
         Name = Drawing.new("Text"),
         Dist = Drawing.new("Text"),
+        Health = Drawing.new("Text"),
         Line = Drawing.new("Line"),
+        Head = CreateSkeletonPart(),
+        Torso = CreateSkeletonPart(),
+        ArmL = CreateSkeletonPart(),
+        ArmR = CreateSkeletonPart(),
+        LegL = CreateSkeletonPart(),
+        LegR = CreateSkeletonPart(),
     }
     o.Box.Thickness = 1.5
     o.Box.Filled = false
@@ -1023,6 +1139,9 @@ local function CreateESP(plr)
     o.Dist.Size = 12
     o.Dist.Center = true
     o.Dist.Outline = true
+    o.Health.Size = 12
+    o.Health.Center = true
+    o.Health.Outline = true
     o.Line.Thickness = 1
     ESPObjs[plr] = o
 end
@@ -1031,7 +1150,9 @@ for _, p in ipairs(Players:GetPlayers()) do CreateESP(p) end
 Players.PlayerAdded:Connect(CreateESP)
 Players.PlayerRemoving:Connect(function(p)
     if ESPObjs[p] then
-        for _, d in pairs(ESPObjs[p]) do pcall(function() d:Remove() end) end
+        for _, d in pairs(ESPObjs[p]) do
+            if d and d.Remove then pcall(function() d:Remove() end) end
+        end
         ESPObjs[p] = nil
     end
 end)
@@ -1087,10 +1208,7 @@ end)
 CreateSection(WeaponsTab, "Municao")
 CreateToggle(WeaponsTab, "Municao Infinita", false, function(v)
     AmmoState.InfiniteAmmo = v
-    if v then
-        AplicarMunicaoInfinita()
-        Notificar("Municao Infinita", "Ativada", Color3.fromRGB(0,255,136))
-    end
+    if v then AplicarMunicaoInfinita() Notificar("Municao Infinita", "Ativada", Color3.fromRGB(0,255,136)) end
 end)
 CreateToggle(WeaponsTab, "Atirar sem recarregar", true, function(v)
     AmmoState.AutoReload = v
@@ -1102,27 +1220,7 @@ end)
 --=============================================================
 local TeamsTab = AddTab("Teams", "T")
 
-local teamsList = {
-    { nome = "Civil" },
-    { nome = "Eletricista" },
-    { nome = "Samu" },
-    { nome = "PM" },
-    { nome = "GCM" },
-    { nome = "CI" },
-    { nome = "CRT" },
-    { nome = "PRF" },
-    { nome = "TDF" },
-    { nome = "MEC" },
-    { nome = "ROTA" },
-    { nome = "PF" },
-    { nome = "PC" },
-    { nome = "BOPE" },
-    { nome = "Cartel" },
-    { nome = "Militar" },
-    { nome = "Federal" },
-    { nome = "EB" },
-    { nome = "Turquia" },
-}
+local teamsList = {"Civil","Eletricista","Samu","PM","GCM","CI","CRT","PRF","TDF","MEC","ROTA","PF","PC","BOPE","Cartel","Militar","Federal","EB","Turquia"}
 
 local function EncontrarTimePorNome(nomeBusca)
     local nomeLower = string.lower(nomeBusca)
@@ -1165,15 +1263,14 @@ local function AplicarTimeEmMim(nomeBusca)
 end
 
 CreateSection(TeamsTab, "Clique num time")
-
 local selectedHighlight = nil
 
-for _, team in ipairs(teamsList) do
+for _, nomeTime in ipairs(teamsList) do
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1,0,0,30)
     btn.BackgroundColor3 = Color3.fromRGB(28,28,42)
     btn.BorderSizePixel = 0
-    btn.Text = team.nome
+    btn.Text = nomeTime
     btn.Font = Enum.Font.Gotham
     btn.TextSize = 12
     btn.TextColor3 = Color3.fromRGB(220,220,230)
@@ -1201,41 +1298,22 @@ for _, team in ipairs(teamsList) do
         stroke.Parent = btn
         selectedHighlight = btn
 
-        local ok, timeEncontrado = AplicarTimeEmMim(team.nome)
+        local ok, timeEncontrado = AplicarTimeEmMim(nomeTime)
         if ok then
-            Notificar("Time aplicado", timeEncontrado or team.nome, Color3.fromRGB(0,255,136))
+            Notificar("Time aplicado", timeEncontrado or nomeTime, Color3.fromRGB(0,255,136))
         else
-            Notificar("Falha", "Nenhum time com '" .. team.nome .. "'", Color3.fromRGB(255,180,0))
+            Notificar("Falha", "Nenhum time com '"..nomeTime.."'", Color3.fromRGB(255,180,0))
         end
     end)
 end
 
 --=============================================================
--- ABA AUTOFARM
+-- ABA FARM
 --=============================================================
 local FarmTab = AddTab("Farm", "F")
-
 CreateSection(FarmTab, "Config")
 CreateToggle(FarmTab, "Ativar Auto Farm", false, function(v) State.AutoFarm.Enabled = v end)
-CreateSlider(FarmTab, "Velocidade (segundos)", 0.1, 3, 0.5, function(v) State.AutoFarm.Speed = v end)
-
-CreateSection(FarmTab, "Debug")
-CreateButton(FarmTab, "Escanear Objetos (Console)", function()
-    print("===== OBJETOS DE TRABALHO =====")
-    print("\n[ProximityPrompts]")
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("ProximityPrompt") then
-            print("   " .. obj:GetFullName() .. " | " .. obj.ActionText)
-        end
-    end
-    print("\n[ClickDetectors]")
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("ClickDetector") then
-            print("   " .. obj:GetFullName())
-        end
-    end
-    Notificar("Scan completo", "Veja o console", Color3.fromRGB(0,200,255))
-end)
+CreateSlider(FarmTab, "Velocidade", 0.1, 3, 0.5, function(v) State.AutoFarm.Speed = v end)
 
 task.spawn(function()
     while true do
@@ -1244,23 +1322,20 @@ task.spawn(function()
             local char = LocalPlayer.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             if hrp then
-                local closestPrompt, closestDist = nil, math.huge
+                local cp, cd = nil, math.huge
                 for _, obj in ipairs(workspace:GetDescendants()) do
                     if obj:IsA("ProximityPrompt") and obj.Enabled then
-                        local parent = obj.Parent
-                        if parent and parent:IsA("BasePart") then
-                            local dist = (hrp.Position - parent.Position).Magnitude
-                            if dist < closestDist then
-                                closestDist = dist
-                                closestPrompt = obj
-                            end
+                        local pa = obj.Parent
+                        if pa and pa:IsA("BasePart") then
+                            local d = (hrp.Position - pa.Position).Magnitude
+                            if d < cd then cd = d cp = obj end
                         end
                     end
                 end
-                if closestPrompt and closestPrompt.Parent then
-                    hrp.CFrame = CFrame.new(closestPrompt.Parent.Position + Vector3.new(0,3,0))
+                if cp and cp.Parent then
+                    hrp.CFrame = CFrame.new(cp.Parent.Position + Vector3.new(0,3,0))
                     task.wait(0.1)
-                    pcall(function() fireproximityprompt(closestPrompt) end)
+                    pcall(function() fireproximityprompt(cp) end)
                 end
             end
         end
@@ -1271,15 +1346,9 @@ end)
 -- ABA CONFIG
 --=============================================================
 local ConfigTab = AddTab("Config", "C")
-
 CreateSection(ConfigTab, "Interface")
-CreateSlider(ConfigTab, "Tamanho do painel", 80, 150, 100, function(v)
-    local s = v / 100
-    Main.Size = UDim2.fromOffset(600*s, 460*s)
-end)
-CreateSlider(ConfigTab, "Transparencia", 0, 100, 0, function(v)
-    Main.BackgroundTransparency = v / 100
-end)
+CreateSlider(ConfigTab, "Tamanho", 80, 150, 100, function(v) Main.Size = UDim2.fromOffset(600*(v/100), 460*(v/100)) end)
+CreateSlider(ConfigTab, "Transparencia", 0, 100, 0, function(v) Main.BackgroundTransparency = v/100 end)
 
 CreateSection(ConfigTab, "Sessao")
 CreateButton(ConfigTab, "Log Out", function()
@@ -1323,6 +1392,17 @@ RunService.RenderStepped:Connect(function()
     for plr, esp in pairs(ESPObjs) do
         local show = State.ESP.Enabled and IsAliveAimbot(plr)
         if show and State.ESP.TeamCheck and plr.Team == LocalPlayer.Team then show = false end
+
+        if show and plr.Character then
+            local hrp0 = plr.Character:FindFirstChild("HumanoidRootPart")
+            if hrp0 then
+                local d0 = (Camera.CFrame.Position - hrp0.Position).Magnitude
+                if d0 > State.ESP.MaxDistance or d0 < State.ESP.MinDistance then
+                    show = false
+                end
+            end
+        end
+
         if show and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
             local hrp = plr.Character.HumanoidRootPart
             local pos, vis = Camera:WorldToViewportPoint(hrp.Position)
@@ -1347,9 +1427,25 @@ RunService.RenderStepped:Connect(function()
 
                 esp.Dist.Visible = State.ESP.Dist
                 if State.ESP.Dist then
-                    esp.Dist.Text = math.floor(dist) .. "m"
+                    esp.Dist.Text = math.floor(dist).."m"
                     esp.Dist.Position = Vector2.new(pos.X, pos.Y + sz/2 + 2)
                     esp.Dist.Color = clr
+                end
+
+                esp.Health.Visible = State.ESP.Health
+                if State.ESP.Health then
+                    local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        esp.Health.Text = math.floor(hum.Health).." HP"
+                        esp.Health.Position = Vector2.new(pos.X, pos.Y - sz/2 - 28)
+                        if hum.Health > 60 then
+                            esp.Health.Color = Color3.fromRGB(0,255,0)
+                        elseif hum.Health > 30 then
+                            esp.Health.Color = Color3.fromRGB(255,200,0)
+                        else
+                            esp.Health.Color = Color3.fromRGB(255,50,50)
+                        end
+                    end
                 end
 
                 esp.Line.Visible = State.ESP.Line
@@ -1358,15 +1454,106 @@ RunService.RenderStepped:Connect(function()
                     esp.Line.To = Vector2.new(pos.X, pos.Y)
                     esp.Line.Color = clr
                 end
+
+                if State.ESP.Skeleton and plr.Character then
+                    local function GSP(partName)
+                        local part = plr.Character:FindFirstChild(partName)
+                        if not part then return nil end
+                        local p, v = Camera:WorldToViewportPoint(part.Position)
+                        if v then return Vector2.new(p.X, p.Y) end
+                        return nil
+                    end
+
+                    local head = GSP("Head")
+                    local torso = GSP("UpperTorso") or GSP("Torso")
+                    local hrpP = GSP("HumanoidRootPart")
+                    local armL = GSP("LeftHand") or GSP("Left Arm") or GSP("LeftUpperArm")
+                    local armR = GSP("RightHand") or GSP("Right Arm") or GSP("RightUpperArm")
+                    local legL = GSP("LeftFoot") or GSP("Left Leg") or GSP("LeftUpperLeg")
+                    local legR = GSP("RightFoot") or GSP("Right Leg") or GSP("RightUpperLeg")
+
+                    local thick = State.ESP.SkeletonThick or 1
+
+                    if head and torso then
+                        esp.Head.Visible = true
+                        esp.Head.From = head
+                        esp.Head.To = torso
+                        esp.Head.Color = clr
+                        esp.Head.Thickness = thick
+                    else
+                        esp.Head.Visible = false
+                    end
+
+                    if torso and hrpP then
+                        esp.Torso.Visible = true
+                        esp.Torso.From = torso
+                        esp.Torso.To = hrpP
+                        esp.Torso.Color = clr
+                        esp.Torso.Thickness = thick
+                    else
+                        esp.Torso.Visible = false
+                    end
+
+                    if torso and armL then
+                        esp.ArmL.Visible = true
+                        esp.ArmL.From = torso
+                        esp.ArmL.To = armL
+                        esp.ArmL.Color = clr
+                        esp.ArmL.Thickness = thick
+                    else
+                        esp.ArmL.Visible = false
+                    end
+
+                    if torso and armR then
+                        esp.ArmR.Visible = true
+                        esp.ArmR.From = torso
+                        esp.ArmR.To = armR
+                        esp.ArmR.Color = clr
+                        esp.ArmR.Thickness = thick
+                    else
+                        esp.ArmR.Visible = false
+                    end
+
+                    if hrpP and legL then
+                        esp.LegL.Visible = true
+                        esp.LegL.From = hrpP
+                        esp.LegL.To = legL
+                        esp.LegL.Color = clr
+                        esp.LegL.Thickness = thick
+                    else
+                        esp.LegL.Visible = false
+                    end
+
+                    if hrpP and legR then
+                        esp.LegR.Visible = true
+                        esp.LegR.From = hrpP
+                        esp.LegR.To = legR
+                        esp.LegR.Color = clr
+                        esp.LegR.Thickness = thick
+                    else
+                        esp.LegR.Visible = false
+                    end
+                else
+                    esp.Head.Visible = false
+                    esp.Torso.Visible = false
+                    esp.ArmL.Visible = false
+                    esp.ArmR.Visible = false
+                    esp.LegL.Visible = false
+                    esp.LegR.Visible = false
+                end
             else
-                for _, d in pairs(esp) do d.Visible = false end
+                for _, d in pairs(esp) do
+                    if d and d.Visible ~= nil then d.Visible = false end
+                end
             end
         else
-            for _, d in pairs(esp) do d.Visible = false end
+            for _, d in pairs(esp) do
+                if d and d.Visible ~= nil then d.Visible = false end
+            end
         end
     end
 end)
 
-SwitchTab("Aimbot")
-Notificar("Nexus Hub", "Hub carregado com sucesso!", Color3.fromRGB(0,255,224))
+SwitchTab("Player")
+Notificar("Nexus Hub", "TP para players adicionado!", Color3.fromRGB(0,255,224))
 print("[NEXUS] Hub carregado!")
