@@ -1,6 +1,6 @@
 --=============================================================
 -- NEXUS HUB - main.lua
--- Key + Load + Aimbot + ESP (Skeleton + Dist) + TP + Player + Armas + Teams + Farm + Config
+-- Key remota (le do keys.txt) + Aimbot + ESP + TP + Player + Armas + Teams + Farm + Config
 --=============================================================
 
 local Players = game:GetService("Players")
@@ -15,14 +15,31 @@ local LocalPlayer = Players.LocalPlayer
 local UIS = UserInputService
 
 --=============================================================
--- KEY SYSTEM
+-- KEY SYSTEM REMOTO
 --=============================================================
-local VALID_KEYS = {
-    ["2010pepeu"]=true, ["NEXUS-A1B2-C3D4"]=true, ["NEXUS-E5F6-G7H8"]=true,
-    ["NEXUS-I9J0-K1L2"]=true, ["NEXUS-M3N4-O5P6"]=true, ["NEXUS-Q7R8-S9T0"]=true,
-    ["NEXUS-U1V2-W3X4"]=true, ["NEXUS-Y5Z6-A7B8"]=true, ["NEXUS-C9D0-E1F2"]=true,
-    ["NEXUS-G3H4-I5J6"]=true,
-}
+local KEYS_URL = "https://raw.githubusercontent.com/leonardobquinello-ship-it/Nexus-hub/main/keys.txt"
+
+local VALID_KEYS = {}
+
+pcall(function()
+    local content = game:HttpGet(KEYS_URL)
+    if content then
+        for linha in content:gmatch("[^\r\n]+") do
+            if not linha:match("^%s*#") and linha:gsub("%s+","") ~= "" then
+                VALID_KEYS[linha:gsub("%s+","")] = true
+            end
+        end
+    end
+end)
+
+if next(VALID_KEYS) == nil then
+    VALID_KEYS = {
+        ["2010pepeu"]=true, ["NEXUS-A1B2-C3D4"]=true, ["NEXUS-E5F6-G7H8"]=true,
+        ["NEXUS-I9J0-K1L2"]=true, ["NEXUS-M3N4-O5P6"]=true, ["NEXUS-Q7R8-S9T0"]=true,
+        ["NEXUS-U1V2-W3X4"]=true, ["NEXUS-Y5Z6-A7B8"]=true, ["NEXUS-C9D0-E1F2"]=true,
+        ["NEXUS-G3H4-I5J6"]=true,
+    }
+end
 
 local keyOk = false
 pcall(function()
@@ -236,6 +253,7 @@ local State = {
             MaxDistance=1000, MinDistance=0 },
     Player = { Fly=false, FlySpeed=150, Noclip=false },
     AutoFarm = { Enabled=false, Speed=0.5 },
+    TP = { Method="Auto", Smooth=false, SmoothTime=0.5 },
 }
 
 local AimbotWhitelist = {}
@@ -676,7 +694,71 @@ local function AddTab(name, icon)
 end
 
 --=============================================================
--- ABA PLAYER (com TP para players)
+-- FUNCAO TP MULTI-METODO
+--=============================================================
+local function TP_ParaPosicao(destino)
+    local char = LocalPlayer.Character
+    if not char then return false, "Sem character" end
+    local metodo = State.TP.Method
+
+    if metodo == "Auto" or metodo == "HRP" then
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local ok = pcall(function() hrp.CFrame = CFrame.new(destino) end)
+            if ok then return true, "HRP CFrame" end
+        end
+    end
+
+    if metodo == "Auto" or metodo == "Pivot" then
+        local ok = pcall(function() char:PivotTo(CFrame.new(destino)) end)
+        if ok then return true, "PivotTo" end
+    end
+
+    if metodo == "Auto" or metodo == "MoveTo" then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            local ok = pcall(function() hum:MoveTo(destino) end)
+            if ok then return true, "Humanoid MoveTo" end
+        end
+    end
+
+    if metodo == "Auto" or metodo == "Velocity" then
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local ok = pcall(function()
+                hrp.Velocity = Vector3.zero
+                hrp.CFrame = CFrame.new(destino)
+            end)
+            if ok then return true, "Velocity" end
+        end
+    end
+
+    if metodo == "Auto" or metodo == "Agressivo" then
+        local ok = pcall(function()
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CFrame = part.CFrame + (destino - char.PrimaryPart.Position)
+                end
+            end
+        end)
+        if ok then return true, "Agressivo" end
+    end
+
+    return false, "Todos os metodos falharam"
+end
+
+local function TP_ComSmooth(destino, tempo)
+    local char = LocalPlayer.Character
+    if not char then return false end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    local tween = TweenService:Create(hrp, TweenInfo.new(tempo or 0.5, Enum.EasingStyle.Linear), {CFrame = CFrame.new(destino)})
+    tween:Play()
+    return true
+end
+
+--=============================================================
+-- ABA PLAYER
 --=============================================================
 local PlayerTab = AddTab("Player", "P")
 
@@ -736,13 +818,13 @@ end)
 CreateSlider(PlayerTab, "Velocidade do Fly", 50, 1000, 150, function(v) State.Player.FlySpeed = v end)
 CreateToggle(PlayerTab, "Noclip", false, function(v) State.Player.Noclip = v end)
 
--- ============ TP PARA PLAYERS ============
-CreateSection(PlayerTab, "Teleport (TP)")
+-- ============ TP ============
+CreateSection(PlayerTab, "Teleport (TP) - Funciona de longe")
 
 local selectedTP = nil
 
 local tpFrame = Instance.new("Frame")
-tpFrame.Size = UDim2.new(1,0,0,180)
+tpFrame.Size = UDim2.new(1,0,0,150)
 tpFrame.BackgroundColor3 = Color3.fromRGB(20,20,35)
 tpFrame.BorderSizePixel = 0
 tpFrame.Parent = PlayerTab
@@ -794,9 +876,20 @@ local function RefreshTPList()
             rc.CornerRadius = UDim.new(0,6)
             rc.Parent = row
 
+            local distLbl = Instance.new("TextLabel")
+            distLbl.Position = UDim2.new(1,-70,0,0)
+            distLbl.Size = UDim2.fromOffset(60,24)
+            distLbl.BackgroundTransparency = 1
+            distLbl.Text = ""
+            distLbl.Font = Enum.Font.Code
+            distLbl.TextSize = 11
+            distLbl.TextColor3 = Color3.fromRGB(0,255,224)
+            distLbl.TextXAlignment = Enum.TextXAlignment.Right
+            distLbl.Parent = row
+
             local txt = Instance.new("TextLabel")
             txt.Position = UDim2.new(0,10,0,0)
-            txt.Size = UDim2.new(1,-14,1,0)
+            txt.Size = UDim2.new(1,-80,1,0)
             txt.BackgroundTransparency = 1
             txt.Text = plr.Name
             txt.Font = Enum.Font.Gotham
@@ -806,9 +899,7 @@ local function RefreshTPList()
             txt.Parent = row
 
             row.MouseButton1Click:Connect(function()
-                if selectedTPRow then
-                    selectedTPRow.BackgroundColor3 = Color3.fromRGB(35,35,55)
-                end
+                if selectedTPRow then selectedTPRow.BackgroundColor3 = Color3.fromRGB(35,35,55) end
                 row.BackgroundColor3 = Color3.fromRGB(0,180,160)
                 selectedTPRow = row
                 selectedTP = plr.Name
@@ -821,7 +912,37 @@ end
 
 RefreshTPList()
 
-CreateButton(PlayerTab, "📍 TP para o jogador selecionado", function()
+task.spawn(function()
+    while PlayerTab.Parent do
+        task.wait(0.5)
+        for i, row in ipairs(tpRows) do
+            if row and row.Parent then
+                local txt = row:FindFirstChildWhichIsA("TextLabel")
+                local distLbl = nil
+                for _, c in ipairs(row:GetChildren()) do
+                    if c:IsA("TextLabel") and c.Position.X.Scale == 1 then distLbl = c break end
+                end
+                if distLbl and txt then
+                    local target = Players:FindFirstChild(txt.Text)
+                    if target and target.Character and LocalPlayer.Character then
+                        local tHRP = target.Character:FindFirstChild("HumanoidRootPart")
+                        local mHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if tHRP and mHRP then
+                            distLbl.Text = math.floor((tHRP.Position - mHRP.Position).Magnitude) .. "m"
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+CreateSection(PlayerTab, "Configuracoes do TP")
+CreateDropdown(PlayerTab, "Metodo", {"Auto", "HRP", "Pivot", "MoveTo", "Velocity", "Agressivo"}, "Auto", function(v) State.TP.Method = v end)
+CreateToggle(PlayerTab, "TP Suave (Tween)", false, function(v) State.TP.Smooth = v end)
+CreateSlider(PlayerTab, "Tempo do TP suave (ms)", 100, 2000, 500, function(v) State.TP.SmoothTime = v / 1000 end)
+
+CreateButton(PlayerTab, "TP para o jogador selecionado", function()
     if not selectedTP then
         Notificar("Nenhum jogador", "Clique num jogador da lista", Color3.fromRGB(255,180,0))
         return
@@ -832,16 +953,31 @@ CreateButton(PlayerTab, "📍 TP para o jogador selecionado", function()
         return
     end
     local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
-    local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if targetHRP and myHRP then
-        myHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
-        Notificar("Teleportado", "Para: "..selectedTP, Color3.fromRGB(0,255,136))
+    if not targetHRP then
+        Notificar("Falha", "Alvo sem HRP", Color3.fromRGB(255,100,100))
+        return
+    end
+    local destino = targetHRP.Position + Vector3.new(0, 3, 0)
+    if State.TP.Smooth then
+        local ok = TP_ComSmooth(destino, State.TP.SmoothTime)
+        if ok then Notificar("TP Suave", "Para: "..selectedTP, Color3.fromRGB(0,255,136)) end
     else
-        Notificar("Falha", "Nao foi possivel teleportar", Color3.fromRGB(255,100,100))
+        local ok, metodo = TP_ParaPosicao(destino)
+        if ok then Notificar("TP OK ("..metodo..")", "Para: "..selectedTP, Color3.fromRGB(0,255,136))
+        else Notificar("Falha", tostring(metodo), Color3.fromRGB(255,100,100)) end
     end
 end)
 
-CreateButton(PlayerTab, "🔄 Atualizar lista de players", function()
+CreateButton(PlayerTab, "TP para a frente da mira", function()
+    local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return end
+    local destino = myHRP.Position + (Camera.CFrame.LookVector * 50)
+    local ok, metodo = TP_ParaPosicao(destino)
+    if ok then Notificar("TP OK ("..metodo..")", "50 studs a frente", Color3.fromRGB(0,255,136))
+    else Notificar("Falha", tostring(metodo), Color3.fromRGB(255,100,100)) end
+end)
+
+CreateButton(PlayerTab, "Atualizar lista de players", function()
     RefreshTPList()
     Notificar("Lista atualizada", #tpRows.." jogadores", Color3.fromRGB(0,200,255))
 end)
@@ -877,16 +1013,6 @@ CreateSection(AimbotTab, "FOV Visual")
 CreateToggle(AimbotTab, "Mostrar circulo FOV", true, function(v) State.Aimbot.ShowFOV = v end)
 
 CreateSection(AimbotTab, "Whitelist (ignorar jogadores)")
-local wlInfo = Instance.new("TextLabel")
-wlInfo.Size = UDim2.new(1,0,0,20)
-wlInfo.BackgroundTransparency = 1
-wlInfo.Text = "Clique pra marcar quem NAO deve ser mirado"
-wlInfo.Font = Enum.Font.Gotham
-wlInfo.TextSize = 11
-wlInfo.TextColor3 = Color3.fromRGB(150,150,180)
-wlInfo.TextXAlignment = Enum.TextXAlignment.Left
-wlInfo.Parent = AimbotTab
-
 local playerListFrame = Instance.new("Frame")
 playerListFrame.Size = UDim2.new(1,0,0,150)
 playerListFrame.BackgroundColor3 = Color3.fromRGB(20,20,35)
@@ -1236,7 +1362,6 @@ local function AplicarTimeEmMim(nomeBusca)
     if not nomeBusca or nomeBusca == "" then return false end
     local sucesso = false
     local teamReal = EncontrarTimePorNome(nomeBusca)
-
     if teamReal then
         pcall(function()
             LocalPlayer.Team = teamReal
@@ -1244,7 +1369,6 @@ local function AplicarTimeEmMim(nomeBusca)
             sucesso = true
         end)
     end
-
     pcall(function()
         local nomeEnviar = teamReal and teamReal.Name or nomeBusca
         for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
@@ -1258,7 +1382,6 @@ local function AplicarTimeEmMim(nomeBusca)
             end
         end
     end)
-
     return sucesso, teamReal and teamReal.Name or nil
 end
 
@@ -1299,11 +1422,8 @@ for _, nomeTime in ipairs(teamsList) do
         selectedHighlight = btn
 
         local ok, timeEncontrado = AplicarTimeEmMim(nomeTime)
-        if ok then
-            Notificar("Time aplicado", timeEncontrado or nomeTime, Color3.fromRGB(0,255,136))
-        else
-            Notificar("Falha", "Nenhum time com '"..nomeTime.."'", Color3.fromRGB(255,180,0))
-        end
+        if ok then Notificar("Time aplicado", timeEncontrado or nomeTime, Color3.fromRGB(0,255,136))
+        else Notificar("Falha", "Nenhum time com '"..nomeTime.."'", Color3.fromRGB(255,180,0)) end
     end)
 end
 
@@ -1397,9 +1517,7 @@ RunService.RenderStepped:Connect(function()
             local hrp0 = plr.Character:FindFirstChild("HumanoidRootPart")
             if hrp0 then
                 local d0 = (Camera.CFrame.Position - hrp0.Position).Magnitude
-                if d0 > State.ESP.MaxDistance or d0 < State.ESP.MinDistance then
-                    show = false
-                end
+                if d0 > State.ESP.MaxDistance or d0 < State.ESP.MinDistance then show = false end
             end
         end
 
@@ -1417,37 +1535,29 @@ RunService.RenderStepped:Connect(function()
                     esp.Box.Position = Vector2.new(pos.X, pos.Y) - Vector2.new(sz/3.6, sz/2)
                     esp.Box.Color = clr
                 end
-
                 esp.Name.Visible = State.ESP.Name
                 if State.ESP.Name then
                     esp.Name.Text = plr.Name
                     esp.Name.Position = Vector2.new(pos.X, pos.Y - sz/2 - 14)
                     esp.Name.Color = clr
                 end
-
                 esp.Dist.Visible = State.ESP.Dist
                 if State.ESP.Dist then
                     esp.Dist.Text = math.floor(dist).."m"
                     esp.Dist.Position = Vector2.new(pos.X, pos.Y + sz/2 + 2)
                     esp.Dist.Color = clr
                 end
-
                 esp.Health.Visible = State.ESP.Health
                 if State.ESP.Health then
                     local hum = plr.Character:FindFirstChildOfClass("Humanoid")
                     if hum then
                         esp.Health.Text = math.floor(hum.Health).." HP"
                         esp.Health.Position = Vector2.new(pos.X, pos.Y - sz/2 - 28)
-                        if hum.Health > 60 then
-                            esp.Health.Color = Color3.fromRGB(0,255,0)
-                        elseif hum.Health > 30 then
-                            esp.Health.Color = Color3.fromRGB(255,200,0)
-                        else
-                            esp.Health.Color = Color3.fromRGB(255,50,50)
-                        end
+                        if hum.Health > 60 then esp.Health.Color = Color3.fromRGB(0,255,0)
+                        elseif hum.Health > 30 then esp.Health.Color = Color3.fromRGB(255,200,0)
+                        else esp.Health.Color = Color3.fromRGB(255,50,50) end
                     end
                 end
-
                 esp.Line.Visible = State.ESP.Line
                 if State.ESP.Line then
                     esp.Line.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
@@ -1471,7 +1581,6 @@ RunService.RenderStepped:Connect(function()
                     local armR = GSP("RightHand") or GSP("Right Arm") or GSP("RightUpperArm")
                     local legL = GSP("LeftFoot") or GSP("Left Leg") or GSP("LeftUpperLeg")
                     local legR = GSP("RightFoot") or GSP("Right Leg") or GSP("RightUpperLeg")
-
                     local thick = State.ESP.SkeletonThick or 1
 
                     if head and torso then
@@ -1480,9 +1589,7 @@ RunService.RenderStepped:Connect(function()
                         esp.Head.To = torso
                         esp.Head.Color = clr
                         esp.Head.Thickness = thick
-                    else
-                        esp.Head.Visible = false
-                    end
+                    else esp.Head.Visible = false end
 
                     if torso and hrpP then
                         esp.Torso.Visible = true
@@ -1490,9 +1597,7 @@ RunService.RenderStepped:Connect(function()
                         esp.Torso.To = hrpP
                         esp.Torso.Color = clr
                         esp.Torso.Thickness = thick
-                    else
-                        esp.Torso.Visible = false
-                    end
+                    else esp.Torso.Visible = false end
 
                     if torso and armL then
                         esp.ArmL.Visible = true
@@ -1500,9 +1605,7 @@ RunService.RenderStepped:Connect(function()
                         esp.ArmL.To = armL
                         esp.ArmL.Color = clr
                         esp.ArmL.Thickness = thick
-                    else
-                        esp.ArmL.Visible = false
-                    end
+                    else esp.ArmL.Visible = false end
 
                     if torso and armR then
                         esp.ArmR.Visible = true
@@ -1510,9 +1613,7 @@ RunService.RenderStepped:Connect(function()
                         esp.ArmR.To = armR
                         esp.ArmR.Color = clr
                         esp.ArmR.Thickness = thick
-                    else
-                        esp.ArmR.Visible = false
-                    end
+                    else esp.ArmR.Visible = false end
 
                     if hrpP and legL then
                         esp.LegL.Visible = true
@@ -1520,9 +1621,7 @@ RunService.RenderStepped:Connect(function()
                         esp.LegL.To = legL
                         esp.LegL.Color = clr
                         esp.LegL.Thickness = thick
-                    else
-                        esp.LegL.Visible = false
-                    end
+                    else esp.LegL.Visible = false end
 
                     if hrpP and legR then
                         esp.LegR.Visible = true
@@ -1530,9 +1629,7 @@ RunService.RenderStepped:Connect(function()
                         esp.LegR.To = legR
                         esp.LegR.Color = clr
                         esp.LegR.Thickness = thick
-                    else
-                        esp.LegR.Visible = false
-                    end
+                    else esp.LegR.Visible = false end
                 else
                     esp.Head.Visible = false
                     esp.Torso.Visible = false
@@ -1555,5 +1652,5 @@ RunService.RenderStepped:Connect(function()
 end)
 
 SwitchTab("Player")
-Notificar("Nexus Hub", "TP para players adicionado!", Color3.fromRGB(0,255,224))
-print("[NEXUS] Hub carregado!")
+Notificar("Nexus Hub", "Key remota ativa! Edite keys.txt pra gerenciar", Color3.fromRGB(0,255,224))
+print("[NEXUS] Hub carregado! Keys remotas de: " .. KEYS_URL)
